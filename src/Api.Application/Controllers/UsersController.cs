@@ -11,7 +11,7 @@ namespace Api.Application.Controllers
     [Route("api/[controller]")]
     public class UsersController : ControllerBase
     {
-        private IUserService _service;
+        public IUserService _service { get; set; }
         public UsersController(IUserService service)
         {
             _service = service;
@@ -81,7 +81,6 @@ namespace Api.Application.Controllers
         }
 
         [HttpPut]
-        [Route("{id}", Name = "GetWithId")]
         public async Task<ActionResult> Put([FromBody] UserEntity user)
         {
             if (!ModelState.IsValid)
@@ -100,6 +99,25 @@ namespace Api.Application.Controllers
                 {
                     return BadRequest();
                 }
+            }
+            catch (ArgumentException e)
+            {
+                return StatusCode((int)HttpStatusCode.InternalServerError, e.Message);
+            }
+        }
+
+        [HttpDelete]
+        [Route("{id}")]
+        public async Task<ActionResult> Delete(Guid id)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                return Ok(await _service.Delete(id));
             }
             catch (ArgumentException e)
             {
