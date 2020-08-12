@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Api.CrossCutting.DependencyInjection;
 using Api.Domain.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -31,14 +33,46 @@ namespace application
             ConfigureService.ConfigureDependenciesService(services);
             ConfigureRepository.ConfigureDependenciesRepository(services);
 
-            var signingConfigurarion = new SigningConfigurations();
-            services.AddSingleton(signingConfigurarion);
+            var signingConfigurarions = new SigningConfigurations();
+            services.AddSingleton(signingConfigurarions);
 
             var tokenConfigurations = new TokenConfigurations();
             new ConfigureFromConfigurationOptions<TokenConfigurations>(
                 Configuration.GetSection("TokenConfigurations"))
                      .Configure(tokenConfigurations);
             services.AddSingleton(tokenConfigurations);
+
+            services.AddAuthentication(authOptions =>
+            {
+                authOptions.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                authOptions.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            }).AddJwtBearer(bearerOptions =>
+            {
+                var paramsValidation = bearerOptions.TokenValidationParameters;
+                paramsValidation.IssuerSigningKey = signingConfigurarions.Key;
+                paramsValidation.ValidAudience = tokenConfigurations.Audience;
+                paramsValidation.ValidIssuer = tokenConfigurations.Issuer;
+
+                // Valida a assinatura de um token recebido
+                paramsValidation.ValidateIssuerSigningKey = true;
+
+                // Verifica se um token recebido ainda é válido
+                paramsValidation.ValidateLifetime = true;
+
+                // Tempo de tolerância para a expiração de um token (utilizado
+                // caso haja problemas de sincronismo de horário entre diferentes
+                // computadores envolvidos no processo de comunicação)
+                paramsValidation.ClockSkew = TimeSpan.Zero;
+            });
+
+            // Ativa o uso do token como forma de autorizar o acesso
+            // a recursos deste projeto
+            services.AddAuthorization(auth =>
+            {
+                auth.AddPolicy("Bearer", new AuthorizationPolicyBuilder()
+                    .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme‌​)
+                    .RequireAuthenticatedUser().Build());
+            });
 
 
             services.AddControllers();
@@ -49,17 +83,36 @@ namespace application
                     Version = "v1",
                     Title = "Curso de API com AspNetCore 3.1 - Na Prática",
                     Description = "Arquitetura DDD",
-                    TermsOfService = new Uri("http://www.mfrinfo.com.br"),
+                    TermsOfService = new Uri("https://github.com/Vanderberg/pratica-api-ddd"),
                     Contact = new OpenApiContact
                     {
-                        Name = "Marcos Fabricio Rosa",
-                        Email = "mfr@mail.com",
-                        Url = new Uri("http://www.mfrinfo.com.br")
+                        Name = "Vanderberg Nunes",
+                        Email = "teste@mail.com",
+
                     },
                     License = new OpenApiLicense
                     {
                         Name = "Termo de Licença de Uso",
-                        Url = new Uri("http://www.mfrinfo.com.br")
+                        Url = new Uri("https://github.com/Vanderberg/pratica-api-ddd")
+                    }
+                });
+
+                c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Description = "Entre com o Token JWT",
+                    Name = "Authorization",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.ApiKey
+                });
+
+                c.AddSecurityRequirement(new OpenApiSecurityRequirement {
+                    {
+                        new OpenApiSecurityScheme {
+                            Reference = new OpenApiReference {
+                                Id = "Bearer",
+                                Type = ReferenceType.SecurityScheme
+                            }
+                        }, new List<string>()
                     }
                 });
             });
